@@ -1,0 +1,11 @@
+{
+  "name": "jumpsbook",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal horse racing bet tracker, horse tracker and form search",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "cheerio": "^1.0.0"
+  }
+}

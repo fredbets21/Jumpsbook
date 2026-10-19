@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Jumps Book">
+<title>Jumps Book</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<style>
+:root{
+  --bg:#F4F5F7;--card:#FFFFFF;--ink:#0E1116;--muted:#5F6672;--line:#E3E5E9;--soft:#E9EBEE;
+  --bronze:#8A6A3E;--win:#12805C;--win-bg:#E6F4EE;--loss:#C2362F;--loss-bg:#FBEAE8;--place:#2F62B5;--place-bg:#E7EEFA;
+  --r-card:20px;--r-ctl:12px;--shadow:0 1px 2px rgba(14,17,22,.04);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--font);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+body.locked{overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:40;background:var(--card)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--ink)}
+:focus-visible{outline:2px solid var(--bronze);outline-offset:2px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 20px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.muted{color:var(--muted)}
+
+/* ---------- Top bar ---------- */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--card);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:12px 28px;min-height:64px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand svg{width:30px;height:30px;flex:none}
+.brand b{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.tabs{display:flex;gap:4px}
+.tabs button{height:40px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-weight:500;font-size:14px}
+.tabs button[aria-selected="true"]{background:var(--bg);color:var(--ink);font-weight:600}
+.sync{margin-left:auto;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;background:none;border:0;padding:6px 0}
+.sync i{width:7px;height:7px;border-radius:50%;background:var(--win);display:inline-block}
+.sync.err{color:var(--loss)}.sync.err i{background:var(--loss)}
+.sync.busy i{background:var(--bronze)}
+
+/* ---------- Bottom nav (phone) ---------- */
+nav.bottom{display:none}
+@media (max-width:760px){
+  header.top .tabs,header.top .top-new{display:none}
+  nav.bottom{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--card);border-top:1px solid var(--line);padding:6px 12px calc(8px + env(safe-area-inset-bottom,0px))}
+  nav.bottom button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0;border:0;background:none;color:var(--muted);font-size:11px;font-weight:500}
+  nav.bottom button[aria-selected="true"]{color:var(--ink);font-weight:600}
+  nav.bottom svg{width:24px;height:24px}
+}
+
+main.wrap{padding-top:24px;padding-bottom:110px}
+@media (max-width:760px){main.wrap{padding-top:16px}}
+.view{display:none}.view.on{display:block}
+
+/* ---------- Cards & primitives ---------- */
+.card{background:var(--card);border-radius:var(--r-card);box-shadow:var(--shadow)}
+.card-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:20px 20px 12px}
+.card-hd h2,.h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.stack{display:flex;flex-direction:column;gap:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:46px;padding:0 18px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:15px;text-decoration:none;white-space:nowrap}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.sm{height:36px;padding:0 14px;font-size:14px;border-radius:999px}
+.btn.full{width:100%}
+.btn:active{transform:translateY(1px)}
+.lnk{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:13px}
+.pill{display:inline-flex;align-items:center;font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap;background:var(--bg);color:var(--ink);border:0}
+.pill.won{background:var(--win-bg);color:var(--win)}.pill.lost{background:var(--loss-bg);color:var(--loss)}
+.pill.placed{background:var(--place-bg);color:var(--place)}.pill.void{background:var(--soft);color:var(--muted)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;background:var(--soft);border-radius:var(--r-ctl);padding:4px}
+.seg button{height:36px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-size:13px;font-weight:500;padding:0 12px}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(14,17,22,.1)}
+.empty{color:var(--muted);padding:20px;margin:0}
+.tile{background:var(--card);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;box-shadow:var(--shadow)}
+.tile span{font-size:12px;color:var(--muted)}.tile b{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tile{padding:10px 12px}.tile b{font-size:18px}}
+@media (max-width:420px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---------- Bets layout ---------- */
+.bets-top{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:20px}
+.bets-top .main{flex:999 1 560px;min-width:0}
+.bets-top .side{flex:1 1 300px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.pnl{padding:24px;display:flex;flex-direction:column;gap:6px}
+.pnl .lbl{font-size:14px;color:var(--muted)}
+.pnl .big{font-size:52px;font-weight:600;letter-spacing:-.035em;line-height:1.05}
+.pnl .big.pos{color:var(--ink)}.pnl .big.neg{color:var(--loss)}
+.pnl .sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.pnl .chart{margin-top:14px}
+.pnl .chart svg{width:100%;height:auto;display:block}
+.axis{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px}
+.pnl .seg{margin-top:10px;max-width:340px}
+@media (max-width:760px){.pnl{padding:20px}.pnl .big{font-size:40px}.pnl .seg{max-width:none}}
+
+.row{display:flex;align-items:center;gap:12px;padding:14px 20px;border-top:1px solid var(--line)}
+.row .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.row .t{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .s{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .r{display:flex;flex-direction:column;align-items:flex-end;gap:1px;text-align:right}
+.row .r b{font-size:15px}
+button.row{width:100%;background:none;border:0;border-top:1px solid var(--line);text-align:left;font:inherit}
+button.row:hover{background:#FAFAFB}
+button.row[aria-current="true"]{background:#F7F5F1;box-shadow:inset 3px 0 0 var(--bronze)}
+
+/* silks */
+.silk{flex:none;display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.silk img{width:88%;height:88%;object-fit:contain}
+.silk svg{width:80%;height:80%}
+.silk.s36{width:36px;height:36px;border-radius:9px}.silk.s40{width:40px;height:40px}.silk.s44{width:44px;height:44px;border-radius:11px}.silk.s84{width:84px;height:84px;border-radius:18px}
+
+/* bets */
+.bet{border-top:1px solid var(--line);padding:14px 20px;display:flex;flex-direction:column;gap:10px}
+.bet.new{animation:flash 2.2s ease-out}
+@keyframes flash{0%,30%{background:#F7F1E6}100%{background:transparent}}
+.bet-hd{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.bet-hd b{color:var(--ink);font-weight:600}
+.bet-hd .pill{margin-left:auto}
+.leg{display:flex;align-items:center;gap:12px}
+.leg .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.leg .t{font-size:16px;font-weight:600;display:flex;align-items:center;gap:6px}
+.leg .s{font-size:13px;color:var(--muted)}
+.leg .odds{font-weight:600}
+.settle{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px}
+.settle button{height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:14px}
+.settle .won{color:var(--win)}.settle .lost{color:var(--loss)}.settle .placed{color:var(--place)}.settle .void{color:var(--muted)}
+.settle button.on.won{background:var(--win);border-color:var(--win);color:#fff}
+.settle button.on.lost{background:var(--loss);border-color:var(--loss);color:#fff}
+.settle button.on.placed{background:var(--place);border-color:var(--place);color:#fff}
+.settle button.on.void{background:var(--muted);border-color:var(--muted);color:#fff}
+.settle.mini{margin-left:48px}
+.settle.mini button{height:34px;font-size:13px}
+.bet-ft{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.bet-ft b{color:var(--ink);font-weight:600}
+.bet-ft .end{margin-left:auto;display:flex;gap:14px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--soft);display:inline-block;flex:none}
+.dot.won{background:var(--win)}.dot.lost{background:var(--loss)}.dot.placed{background:var(--place)}.dot.void{background:var(--muted)}
+.applist .row{padding:12px 20px}
+.bk{width:32px;height:32px;border-radius:9px;display:inline-grid;place-items:center;font-size:11px;font-weight:700;color:#fff;flex:none;background:var(--ink)}
+.pos{color:var(--win)}.neg{color:var(--loss)}
+
+/* ---------- Horse detail ---------- */
+.two{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.two .l{flex:1 1 340px;min-width:0}
+.two .r{flex:999 1 520px;min-width:0}
+.searchbox{position:relative}
+.searchbox svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted)}
+input.text,select.text,textarea{width:100%;height:48px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--card);padding:0 14px;font-size:16px;outline:none}
+.searchbox input{padding-left:42px}
+input.text:focus,textarea:focus,select.text:focus{border-color:var(--ink)}
+textarea{height:auto;min-height:90px;padding:12px 14px;resize:vertical}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.prof{padding:20px;display:flex;flex-direction:column;gap:16px}
+.prof-hd{display:flex;align-items:center;gap:16px}
+.prof-hd h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.prof-hd .s{font-size:14px;color:var(--muted)}
+.figs{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fig{width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--card)}
+.fig.w{background:var(--win);border-color:var(--win);color:#fff}.fig.p{background:var(--bronze);border-color:var(--bronze);color:#fff}
+.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tiles3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tiles3 .tile{background:var(--bg);box-shadow:none}
+.sec h3{margin:0 0 8px;font-size:16px;font-weight:600}
+.list{border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.list .row:first-child{border-top:0}
+.date{width:52px;height:52px;border-radius:12px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}
+.date b{font-size:18px;line-height:1}.date small{font-size:11px;font-weight:600;color:var(--muted)}
+.prof-ft{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.prof-ft a{color:var(--ink);font-weight:600}
+.note{background:var(--bg);border-radius:12px;padding:12px 14px;margin-top:8px}
+.note small{display:flex;justify-content:space-between;color:var(--muted);margin-bottom:2px}
+.hint{font-size:14px;color:var(--muted);background:var(--bg);border-radius:12px;padding:12px 14px;margin:12px 20px}
+.hint a{color:var(--ink);font-weight:600}
+.loading{padding:28px 20px;color:var(--muted);display:flex;gap:10px;align-items:center}
+.spin{display:inline-block;width:18px;height:18px;border:2.5px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ---------- Bet slip sheet ---------- */
+.sheet{position:fixed;inset:0;z-index:60;background:rgba(14,17,22,.4);display:flex;align-items:center;justify-content:center;padding:24px}
+.sheet[hidden]{display:none}
+.sheet-panel{background:var(--bg);border-radius:24px;width:100%;max-width:520px;max-height:100%;overflow:auto;display:flex;flex-direction:column}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 8px;position:sticky;top:0;background:var(--bg);z-index:2}
+.sheet-hd h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.02em}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:var(--card);display:inline-flex;align-items:center;justify-content:center}
+.slip{padding:8px 20px 24px;display:flex;flex-direction:column;gap:14px}
+@media (max-width:760px){
+  .sheet{padding:0;align-items:stretch}
+  .sheet-panel{max-width:none;border-radius:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+}
+.legcard{background:var(--card);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.legcard .leg-hd{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.field{position:relative}
+input.odds{font-weight:600;font-size:18px}
+.switch{display:flex;align-items:center;justify-content:space-between;min-height:44px}
+.switch small{display:block;color:var(--muted);font-size:12px}
+.tgl{position:relative;width:50px;height:30px;flex:none}
+.tgl input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.tgl i{position:absolute;inset:0;border-radius:999px;background:var(--line);transition:background .15s}
+.tgl i::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .15s}
+.tgl input:checked+i{background:var(--win)}.tgl input:checked+i::after{transform:translateX(20px)}
+.tgl input:focus-visible+i{outline:2px solid var(--bronze);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:500}
+.chips button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
+.summary{background:var(--card);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.summary .r{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
+.summary .r span:last-child{color:var(--ink)}
+.summary .main{align-items:baseline;color:var(--ink);font-size:15px;font-weight:500}
+.summary .main b{font-size:30px;font-weight:700;letter-spacing:-.02em;color:var(--win)}
+.msg{font-size:14px;color:var(--loss);min-height:1.2em}
+
+/* combobox */
+.pop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:70;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 30px rgba(14,17,22,.16);max-height:280px;overflow:auto;padding:6px}
+.pg{font-size:12px;font-weight:600;color:var(--muted);padding:8px 10px 4px}
+.po{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer}
+.po .txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.po small{color:var(--muted)}
+.po:hover,.po.hl{background:var(--bg)}
+.tk{font-size:11px;font-weight:600;color:var(--bronze)}
+
+/* login, toast, footer */
+.login{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:var(--bg)}
+.login[hidden]{display:none}
+.login .box{width:100%;max-width:360px;background:var(--card);border-radius:24px;padding:32px 24px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.login svg{width:64px;height:64px}
+.login h1{margin:4px 0 0;font-size:24px;font-weight:600}
+.login p{margin:0 0 6px;color:var(--muted)}
+.login input{text-align:center}
+.login .err{color:var(--loss);min-height:1.3em;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:#fff;padding:10px 12px 10px 16px;border-radius:14px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);z-index:90;transition:.2s;max-width:calc(100% - 32px);font-size:14px}
+.toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{background:#fff;color:var(--ink);border:0;border-radius:9px;padding:6px 10px;font-weight:600}
+@media (max-width:760px){.toast{bottom:calc(86px + env(safe-area-inset-bottom,0px))}}
+.foot{color:var(--muted);font-size:13px;margin:28px 0 0;display:flex;flex-wrap:wrap;gap:8px 18px}
+.foot a{color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="login" id="login" hidden>
+  <div class="box">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="#FFFFFF" stroke="#E3E5E9"/><defs><clipPath id="capclipa"><path d="M24 62C24 40 37 28 52 28C67 28 76 40 76 62Z"/></clipPath></defs><path d="M24 62C24 40 37 28 52 28C67 28 76 40 76 62Z" fill="#0E1116"/><g clip-path="url(#capclipa)"><rect x="44" y="20" width="12" height="50" fill="#8A6A3E"/></g><path d="M20 62H80" stroke="#0E1116" stroke-width="5" stroke-linecap="round"/><path d="M76 62L90 66" stroke="#0E1116" stroke-width="5" stroke-linecap="round"/></svg>
+    <h1>Jumps Book</h1>
+    <p>Enter your passcode to open your book.</p>
+    <label for="passIn" class="sr">Passcode</label>
+    <input id="passIn" class="text" type="password" autocomplete="current-password" placeholder="Passcode">
+    <button class="btn dark full" data-act="login">Unlock</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="#" data-act="tab" data-v="bets"><svg viewBox="0 0 100 100" aria-hidden="true"><rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="#FFFFFF" stroke="#E3E5E9"/><defs><clipPath id="capclipb"><path d="M24 62C24 40 37 28 52 28C67 28 76 40 76 62Z"/></clipPath></defs><path d="M24 62C24 40 37 28 52 28C67 28 76 40 76 62Z" fill="#0E1116"/><g clip-path="url(#capclipb)"><rect x="44" y="20" width="12" height="50" fill="#8A6A3E"/></g><path d="M20 62H80" stroke="#0E1116" stroke-width="5" stroke-linecap="round"/><path d="M76 62L90 66" stroke="#0E1116" stroke-width="5" stroke-linecap="round"/></svg><b>Jumps Book</b></a>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" aria-selected="true" data-act="tab" data-v="bets">Bets</button>
+      <button role="tab" aria-selected="false" data-act="tab" data-v="tracker">Tracker</button>
+      <button role="tab" aria-selected="false" data-act="tab" data-v="search">Form search</button>
+    </nav>
+    <button class="sync" id="sync" data-act="retrysync"><i></i><span id="syncTxt"></span></button>
+    <button class="btn dark top-new" data-act="newbet">+ New bet</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="view on" id="v-bets">
+    <div class="bets-top">
+      <div class="main card pnl">
+        <span class="lbl" id="pnlLabel">Season P&amp;L, 2026/27</span>
+        <span class="big" id="hdPnl">£0.00</span>
+        <div class="sub"><span class="pill" id="hdRoi">0.0% ROI</span><span id="hdSub"></span></div>
+        <div class="chart" id="spark"></div>
+        <div class="seg" id="range" role="group" aria-label="Time range">
+          <button aria-pressed="false" data-act="range" data-r="1w">1W</button>
+          <button aria-pressed="false" data-act="range" data-r="1m">1M</button>
+          <button aria-pressed="false" data-act="range" data-r="3m">3M</button>
+          <button aria-pressed="true" data-act="range" data-r="season">Season</button>
+        </div>
+      </div>
+      <div class="side">
+        <div class="tiles" id="tiles"></div>
+        <div class="card"><div class="card-hd"><h2>Coming up from your tracker</h2></div><div id="coming"></div></div>
+      </div>
+    </div>
+    <div class="card" id="betsCard">
+      <div class="card-hd"><h2>Your bets</h2><button class="btn dark sm" data-act="newbet">+ New bet</button></div>
+      <div style="padding:0 20px 14px"><div class="seg" id="filters" role="group" aria-label="Filter bets" style="max-width:340px">
+        <button aria-pressed="true" data-act="filter" data-f="all">All</button>
+        <button aria-pressed="false" data-act="filter" data-f="pending">Pending</button>
+        <button aria-pressed="false" data-act="filter" data-f="settled">Settled</button>
+      </div></div>
+      <div id="betList"></div>
+    </div>
+    <div class="card applist" style="margin-top:20px"><div class="card-hd"><h2>By betting app</h2></div><div id="byApp"></div></div>
+  </section>
+
+  <section class="view" id="v-tracker">
+    <div class="two">
+      <div class="l card">
+        <div class="card-hd"><h2>Tracked horses</h2><span class="pill" id="trkCount">0</span></div>
+        <div style="padding:0 20px 14px">
+          <label for="tAdd" class="sr">Add a horse</label>
+          <div class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="tAdd" class="text" placeholder="Add a horse: name or irishracing.com link" autocomplete="off"></div>
+        </div>
+        <div id="tResults"></div>
+        <div id="trackedList"></div>
+      </div>
+      <div class="r card" id="trackedDetail"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-search">
+    <div class="two">
+      <div class="l card">
+        <div class="card-hd"><h2>Find a horse</h2></div>
+        <div style="padding:0 20px 14px">
+          <label for="sQ" class="sr">Horse name</label>
+          <div class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="sQ" class="text" placeholder="Horse name or irishracing.com link" autocomplete="off"></div>
+        </div>
+        <div id="sResults"></div>
+      </div>
+      <div class="r card" id="sDetail"><p class="empty">Search for a horse to see its silks, form, rating and upcoming entries.</p></div>
+    </div>
+  </section>
+
+  <p class="foot"><span>Racing data from <a href="https://www.irishracing.com/" target="_blank" rel="noopener">irishracing.com</a></span>
+    <button class="lnk" data-act="export">Download backup</button><button class="lnk" data-act="reindex">Refresh horse index</button><button class="lnk" data-act="logout">Sign out</button></p>
+</main>
+
+<nav class="bottom" aria-label="Sections">
+  <button aria-selected="true" data-act="tab" data-v="bets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 18V6M9 18v-7M14 18V9M19 18V4"/></svg>Bets</button>
+  <button aria-selected="false" data-act="tab" data-v="tracker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6l5.6-.6z"/></svg>Tracker</button>
+  <button aria-selected="false" data-act="tab" data-v="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Form</button>
+</nav>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-hd"><h2 id="sheetTitle">New bet</h2><button class="iconbtn" data-act="closeslip" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="slip" id="slip"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastBtn" hidden>View</button></div>
+
+<script>
+/* ================= Config ================= */
+const BOOKS=["Bet365","Paddy Power","Sky Bet","William Hill","Betfair","Betfred","Coral","Ladbrokes","BoyleSports","Other"];
+const TYPES={single:{n:1,label:"Single"},double:{n:2,label:"Double"},treble:{n:3,label:"Treble"},acca:{n:4,label:"Acca"}};
+const SEASON_START="2026-10-01",SEASON_END="2027-06-30";
+const STALE_MS=6*60*60*1000;
+const RANGES={"1w":{days:7,label:"P&L, last 7 days"},"1m":{days:30,label:"P&L, last 30 days"},"3m":{days:91,label:"P&L, last 3 months"},"season":{days:null,label:"Season P&L, 2026/27"}};
+
+/* ================= Helpers ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const gbp=n=>(n<0?"−£":"£")+Math.abs(n).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
+const sgbp=n=>(n>0?"+":"")+gbp(n);
+const pct=n=>(n>0?"+":"")+n.toFixed(1)+"%";
+const fmtDate=d=>d?new Date(d+"T12:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"";
+const fmtDateY=d=>d?new Date(d+"T12:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"2-digit"}):"";
+const dayMon=d=>{const x=new Date(d+"T12:00");return{d:x.getDate(),m:x.toLocaleDateString("en-GB",{month:"short"}).toUpperCase()}};
+const todayISO=()=>{const n=new Date();return new Date(n-n.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const addDays=(iso,n)=>{const d=new Date(iso+"T12:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+const ago=iso=>{if(!iso)return"";const m=Math.round((Date.now()-new Date(iso))/6e4);return m<1?"just now":m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} hr ago`:`${Math.round(m/1440)} days ago`};
+const shortName=n=>String(n||"").replace(/\s*\([A-Z]{2,4}\)\s*$/,"");
+const norm=s=>shortName(s).toLowerCase().replace(/['’`]/g,"").replace(/[^a-z0-9]+/g," ").trim();
+function toDec(s){s=String(s||"").trim().toLowerCase();if(!s)return NaN;if(["evs","evens","ev","1/1"].includes(s))return 2;
+  if(s.includes("/")){const[a,b]=s.split("/").map(Number);return b>0&&a>0?a/b+1:NaN}const d=parseFloat(s);return d>1?d:NaN}
+const initials=b=>b==="Other"?"··":b==="Bet365"?"365":b==="BoyleSports"?"BS":b.replace(/[^A-Za-z0-9 ]/g,"").split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const badge=b=>`<span class="bk">${esc(initials(b))}</span>`;
+const matchBook=b=>{const n=String(b||"").toLowerCase().replace(/[^a-z0-9]/g,"");return BOOKS.find(x=>x.toLowerCase().replace(/[^a-z0-9]/g,"")===n)||null};
+// Placeholder shown until a horse's real silks are known (a plain jersey and cap, never another horse's colours).
+const PLAIN=`<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M28 34L42 25H72L82 30L83 70H75L75 74H44L41 66L32 70Z" fill="#E9EBEE" stroke="#C9CDD3" stroke-width="1.5" stroke-linejoin="round"/><circle cx="19" cy="29" r="10" fill="#E9EBEE" stroke="#C9CDD3" stroke-width="1.5"/></svg>`;
+const silksSrc=u=>`/api/silks?u=${encodeURIComponent(u)}`;
+function silk(url,name,size=40){
+  const inner=url?`<img src="${esc(silksSrc(url))}" alt="${esc(shortName(name))} racing silks" loading="lazy" onerror="this.outerHTML=PLAIN">`:PLAIN;
+  return `<span class="silk s${size}">${inner}</span>`;
+}
+const ICON_DEL=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>`;
+
+/* ================= API & sync ================= */
+let PASS="";try{PASS=localStorage.getItem("jb-pass")||""}catch(e){}
+function showLogin(msg){$("#login").hidden=false;$("#loginErr").textContent=msg||"";setTimeout(()=>$("#passIn").focus(),50)}
+async function api(path,{method="GET",body}={}){
+  const r=await fetch(path,{method,headers:{"x-passcode":PASS,...(body?{"content-type":"application/json"}:{})},body:body?JSON.stringify(body):undefined});
+  let data={};try{data=await r.json()}catch(e){}
+  if(r.status===401){showLogin(PASS?"That passcode didn’t work.":"");throw new Error("auth")}
+  if(!r.ok)throw new Error(data.error||`Request failed (${r.status})`);
+  return data;
+}
+const LKEY="jb-state-v1";
+let state={bets:[],tracked:[],settings:{}};
+try{const s=JSON.parse(localStorage.getItem(LKEY)||"null");if(s&&s.bets)state=s}catch(e){}
+const live=a=>(a||[]).filter(x=>!x.del);
+function mergeList(a=[],b=[]){const m=new Map();for(const it of[...a,...b]){const c=m.get(it.id);if(!c||(it.u||0)>=(c.u||0))m.set(it.id,it)}return[...m.values()]}
+const mergeState=(a,b)=>({bets:mergeList(a.bets,b.bets),tracked:mergeList(a.tracked,b.tracked),settings:{...(a.settings||{}),...(b.settings||{})}});
+function persist(){try{localStorage.setItem(LKEY,JSON.stringify(state))}catch(e){}}
+function setSync(t,kind){const el=$("#sync");$("#syncTxt").textContent=t;el.classList.toggle("err",kind==="err");el.classList.toggle("busy",kind==="busy")}
+let saveT=null,saving=false;
+function changed(){persist();setSync("Saving…","busy");clearTimeout(saveT);saveT=setTimeout(pushState,600);renderAll();}
+async function pushState(){
+  if(saving){saveT=setTimeout(pushState,400);return}
+  saving=true;const sent=JSON.stringify(state);
+  try{const r=await api("/api/data",{method:"PUT",body:{state:JSON.parse(sent)}});state=mergeState(r.state,state);persist();setSync("Synced");renderAll();}
+  catch(e){if(e.message!=="auth"){setSync("Not saved, tap to retry","err");toast(`Couldn’t save to the server: ${e.message}. It’s kept on this device and will retry.`);saveT=setTimeout(pushState,15000)}}
+  finally{saving=false}
+}
+async function pullState(){
+  setTimeout(resolveSilks,1500);
+  try{const r=await api("/api/data");const before=JSON.stringify(r.state);state=mergeState(r.state,state);persist();renderAll();
+    if(JSON.stringify(state)!==before)pushState();else setSync("Synced");}
+  catch(e){if(e.message!=="auth")setSync("Can’t reach server","err")}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&PASS)pullState()});
+
+/* ================= Tabs, sheet & toast ================= */
+function show(v){document.querySelectorAll('[data-act="tab"][data-v]').forEach(b=>{if(b.hasAttribute("aria-selected"))b.setAttribute("aria-selected",b.dataset.v===v)});
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="v-"+v));window.scrollTo({top:0});}
+function openSlip(){renderSlip();$("#sheet").hidden=false;document.body.classList.add("locked");setTimeout(()=>{const f=slip.legs.findIndex(l=>!l.horse);$("#"+(f<0?"sStake":"h"+f))?.focus()},60)}
+function closeSlip(){$("#sheet").hidden=true;document.body.classList.remove("locked");closePop()}
+let toastT;
+function toast(msg,btn){$("#toastMsg").textContent=msg;const b=$("#toastBtn");b.hidden=!btn;if(btn){b.textContent=btn.label;b.onclick=()=>{btn.fn();$("#toast").classList.remove("on")}}
+  $("#toast").classList.add("on");clearTimeout(toastT);toastT=setTimeout(()=>$("#toast").classList.remove("on"),4000);}
+
+/* ================= Bet maths ================= */
+function calc(b){
+  const s=+b.stake||0,frac=+b.frac||.2,total=b.ew?s*2:s;
+  let wf=1,pf=1,pot=1,potp=1,pending=false,lost=false,allVoid=b.legs.length>0;
+  for(const l of b.legs){const d=toDec(l.odds),pd=(d-1)*frac+1;pot*=d;potp*=pd;
+    if(l.status!=="void")allVoid=false;
+    if(l.status==="won"){wf*=d;pf*=pd}
+    else if(l.status==="placed"){wf=0;pf*=pd}
+    else if(l.status==="lost"){wf=0;pf=0;lost=true}
+    else if(l.status!=="void"){pending=true}}
+  const ifWin=s*pot+(b.ew?s*potp:0),settled=!pending||lost,ret=settled?s*wf+(b.ew?s*pf:0):null;
+  let label="pending";if(settled)label=allVoid?"void":ret===0?"lost":wf>0?"won":"placed";
+  return{total,ifWin,placeOnly:b.ew?s*potp:0,odds:pot,ret,pnl:settled?ret-total:null,settled,label};
+}
+const inSeason=b=>b.date>=SEASON_START&&b.date<=SEASON_END;
+const typeLabel=b=>{const n=b.legs.length;const t=b.type==="acca"?`${n}-fold acca`:TYPES[b.type].label.toLowerCase();const s=(b.ew?"each-way ":"")+t;return s[0].toUpperCase()+s.slice(1)};
+
+/* ================= Bet slip ================= */
+const blank=()=>({horse:"",race:"",odds:"",silks:null,hid:null,url:null});
+let slip={type:"single",ew:false,frac:"0.2",places:"3",book:"Bet365",date:todayISO(),stake:"",legs:[blank()]};
+function setType(t){slip.type=t;const n=TYPES[t].n;
+  if(t==="acca"){while(slip.legs.length<4)slip.legs.push(blank())}else{slip.legs=slip.legs.slice(0,n);while(slip.legs.length<n)slip.legs.push(blank())}
+  renderSlip();}
+function renderSlip(){
+  const multi=slip.legs.length>1;
+  $("#slip").innerHTML=`
+  <div class="seg" role="group" aria-label="Bet type">${Object.entries(TYPES).map(([k,v])=>`<button aria-pressed="${slip.type===k}" data-act="settype" data-t="${k}">${v.label}</button>`).join("")}</div>
+  ${slip.legs.map((l,i)=>`
+  <div class="legcard">
+    ${multi?`<div class="leg-hd"><span>Leg ${i+1}</span>${slip.type==="acca"&&slip.legs.length>4?`<button class="lnk" data-act="rmleg" data-i="${i}">Remove</button>`:""}</div>`:""}
+    <div style="display:flex;align-items:flex-end;gap:12px">${silk(l.silks,l.horse,44)}
+      <div class="field" style="flex:1"><label class="f" for="h${i}">Horse<input id="h${i}" class="text" data-leg="${i}" data-f="horse" data-combo="horse" value="${esc(l.horse)}" placeholder="Pick or type a horse" autocomplete="off"></label></div></div>
+    <div class="field"><label class="f" for="r${i}">Race<input id="r${i}" class="text" data-leg="${i}" data-f="race" data-combo="race" value="${esc(l.race)}" placeholder="Course and time, race" autocomplete="off"></label></div>
+    <label class="f" for="o${i}">Odds<input id="o${i}" class="text odds" data-leg="${i}" data-f="odds" value="${esc(l.odds)}" placeholder="5/2" autocomplete="off" inputmode="text"></label>
+  </div>`).join("")}
+  ${slip.type==="acca"?`<button class="btn full" data-act="addleg">+ Add another horse</button>`:""}
+  <div class="legcard">
+    <div class="grid2">
+      <label class="f" for="sStake">Stake${slip.ew?" per way":""}<input id="sStake" class="text odds" type="number" min="0" step="0.5" inputmode="decimal" data-slip="stake" value="${esc(slip.stake)}" placeholder="£10.00"></label>
+      <label class="f" for="sDate">Date<input id="sDate" class="text" type="date" data-slip="date" value="${slip.date}"></label>
+    </div>
+    <div class="switch"><span>Each way<small>${slip.ew?"Stake is per way":"Doubles your stake to cover the place"}</small></span><label class="tgl"><input type="checkbox" id="sEw" ${slip.ew?"checked":""} aria-label="Each way"><i></i></label></div>
+    ${slip.ew?`<div class="grid2"><label class="f" for="sFrac">Place terms<select id="sFrac" class="text" data-slip="frac"><option value="0.2" ${slip.frac=="0.2"?"selected":""}>1/5 odds</option><option value="0.25" ${slip.frac=="0.25"?"selected":""}>1/4 odds</option></select></label>
+      <label class="f" for="sPlaces">Places<select id="sPlaces" class="text" data-slip="places">${[2,3,4,5,6].map(p=>`<option ${slip.places==p?"selected":""}>${p}</option>`).join("")}</select></label></div>`:""}
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px"><span class="muted" style="font-size:13px">Betting app</span>
+    <div class="chips">${BOOKS.map(b=>`<button aria-pressed="${slip.book===b}" data-act="book" data-b="${esc(b)}">${esc(b)}</button>`).join("")}</div></div>
+  <div class="summary" id="sum"></div>
+  <div class="msg" id="betMsg"></div>
+  <button class="btn dark full" style="height:54px;font-size:16px" data-act="addbet">Add bet</button>`;
+  preview();
+}
+function preview(){
+  const c=calc({...slip,stake:+slip.stake||0,legs:slip.legs.map(l=>({...l,status:"pending"}))});
+  const ok=slip.legs.every(l=>!isNaN(toDec(l.odds)));
+  $("#sum").innerHTML=`<div class="r"><span>Total stake</span><span>${gbp(c.total)}</span></div>
+    ${slip.legs.length>1?`<div class="r"><span>Combined odds</span><span>${ok?c.odds.toFixed(2):"–"}</span></div>`:""}
+    ${slip.ew?`<div class="r"><span>Return if ${slip.legs.length>1?"all place":"placed"}</span><span>${ok?gbp(c.placeOnly):"–"}</span></div>`:""}
+    <div class="r main"><span>Return if ${slip.legs.length>1?"all win":"it wins"}</span><b>${ok?gbp(c.ifWin):"£–"}</b></div>`;
+}
+let lastAdded=null,filter="all",range="season",editing=null;
+function addBet(){const m=$("#betMsg");
+  if(slip.legs.some(l=>!l.horse.trim()))return m.textContent=slip.legs.length>1?"Enter a horse for every leg.":"Enter a horse name.";
+  if(slip.legs.some(l=>isNaN(toDec(l.odds))))return m.textContent="Enter odds like 5/2, 3.5 or evs.";
+  if(!(+slip.stake>0))return m.textContent="Enter a stake above £0.";
+  if(!slip.date)return m.textContent="Choose a date.";
+  m.textContent="";
+  const nb={id:"b"+Date.now()+Math.random().toString(36).slice(2,6),u:Date.now(),type:slip.type,date:slip.date,book:slip.book,stake:+slip.stake,ew:slip.ew,frac:+slip.frac,places:+slip.places,
+    legs:slip.legs.map(l=>{const t=trackedByName(l.horse);return{horse:l.horse.trim(),race:l.race.trim(),odds:l.odds.trim(),status:"pending",
+      silks:l.silks||t?.profile?.silks||null,hid:l.hid||t?.id||null,url:l.url||t?.url||null}})};
+  state.bets.push(nb);lastAdded=nb.id;setTimeout(()=>{if(lastAdded===nb.id)lastAdded=null},2500);
+  if(filter==="settled")filter="all";
+  slip.legs=slip.legs.map(blank);slip.stake="";
+  closeSlip();show("bets");changed();resolveSilks();
+  setTimeout(()=>document.querySelector(`[data-bid="${nb.id}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}),80);
+  toast(inSeason(nb)?"Bet added":"Bet added, but it’s dated outside the 2026/27 season so it doesn’t count towards the P&L");
+}
+function slipFromEntry(d){
+  let i=slip.legs.findIndex(l=>!l.horse.trim());if(i<0){if(slip.type==="acca"){slip.legs.push(blank());i=slip.legs.length-1}else i=0}
+  slip.legs[i]={horse:d.horse,race:d.race||"",odds:d.odds||"",silks:d.silks||null,hid:d.hid||null,url:d.url||null};
+  if(i===0&&d.date)slip.date=d.date;
+  const bk=matchBook(d.book);if(bk)slip.book=bk;
+  openSlip();
+}
+
+/* ---------- Silks for bets: from the tracker, else looked up on irishracing.com ---------- */
+let resolving=false;
+async function resolveSilks(){
+  if(resolving||!PASS)return;resolving=true;
+  try{
+    for(const b of live(state.bets)){
+      for(const l of b.legs){
+        if(l.silks||l.silksTried||!l.horse)continue;
+        let p=null;const t=trackedByName(l.horse);
+        if(t?.profile?.silks)p=t.profile;
+        else{
+          try{const r=await api(`/api/search?q=${encodeURIComponent(shortName(l.horse))}`);
+            const hit=r.results.find(h=>norm(h.name)===norm(l.horse));
+            if(hit)p=await fetchProfile(hit.path);}catch(e){if(e.message==="auth")return}
+        }
+        l.silksTried=true;
+        if(p?.silks){l.silks=p.silks;l.hid=p.id;l.url=p.url}
+        b.u=Date.now();changed();
+        await new Promise(r=>setTimeout(r,400));
+      }
+    }
+  }finally{resolving=false}
+}
+
+/* ---------- Combobox suggestions ---------- */
+let pop=null,popItems=[],popIdx=-1,popInput=null;
+const trackedByName=n=>live(state.tracked).find(t=>norm(t.name)===norm(n));
+function suggestions(inp){
+  const kind=inp.dataset.combo,q=inp.value.trim().toLowerCase(),f=s=>!q||s.toLowerCase().includes(q),groups=[];
+  const legs=live(state.bets).flatMap(b=>b.legs);
+  if(kind==="horse"){
+    const tr=live(state.tracked);
+    groups.push({title:"In your tracker",items:tr.filter(t=>f(shortName(t.name))).map(t=>{const e=t.profile?.entries?.[0];return{v:shortName(t.name),sub:e?`Next: ${fmtDate(e.date)}, ${e.course}`:"",tk:1,silks:t.profile?.silks}})});
+    const seen={};legs.forEach(l=>{if(!seen[l.horse])seen[l.horse]={n:0,silks:l.silks};seen[l.horse].n++});
+    groups.push({title:"From your previous bets",items:Object.keys(seen).filter(n=>!trackedByName(n)&&f(n)).sort().map(n=>({v:n,sub:`${seen[n].n} bet${seen[n].n>1?"s":""}`,silks:seen[n].silks}))});
+  }else{
+    const i=+inp.dataset.leg,t=trackedByName(slip.legs[i].horse);
+    const ents=(t?.profile?.entries||[]).filter(e=>e.date>=todayISO());
+    if(ents.length)groups.push({title:`${shortName(t.name)}’s entries`,items:ents.map(e=>({v:`${e.course}${e.time?" "+e.time:""}, ${e.race}`,sub:fmtDate(e.date)+(e.odds?.best?`, ${e.odds.best.odds}`:""),date:e.date,odds:e.odds?.best?.odds,book:e.odds?.best?.book})).filter(x=>f(x.v))});
+    const seenR=new Set(groups.flatMap(g=>g.items.map(x=>x.v)));
+    const prev=[...new Set(legs.map(l=>l.race).filter(Boolean))].filter(r=>!seenR.has(r)&&f(r));
+    groups.push({title:"From your previous bets",items:prev.slice(0,12).map(r=>({v:r}))});
+  }
+  return groups.filter(g=>g.items.length);
+}
+function closePop(){if(pop){pop.remove();pop=null;popInput=null}}
+function openPop(inp){closePop();const gs=suggestions(inp);if(!gs.length)return;popInput=inp;popItems=[];popIdx=-1;
+  const d=document.createElement("div");d.className="pop";d.setAttribute("role","listbox");
+  d.innerHTML=gs.map(g=>`<div class="pg">${esc(g.title)}</div>`+g.items.map(it=>{const k=popItems.push(it)-1;
+    return `<div class="po" role="option" data-k="${k}">${inp.dataset.combo==="horse"?silk(it.silks,it.v,36):""}<span class="txt"><span>${esc(it.v)}</span>${it.sub?`<small>${esc(it.sub)}</small>`:""}</span>${it.tk?`<span class="tk">Tracked</span>`:""}</div>`}).join("")).join("");
+  d.addEventListener("mousedown",e=>e.preventDefault());
+  d.addEventListener("click",e=>{const o=e.target.closest(".po");if(o)pick(+o.dataset.k)});
+  inp.closest(".field").appendChild(d);pop=d;}
+function pick(k){const it=popItems[k],inp=popInput;if(!it||!inp)return;const i=+inp.dataset.leg,L=slip.legs[i];
+  inp.value=it.v;L[inp.dataset.f]=it.v;
+  if(inp.dataset.f==="horse"){const t=trackedByName(it.v);L.silks=t?.profile?.silks||it.silks||null;L.hid=t?.id||null;L.url=t?.url||null;closePop();renderSlip();$("#r"+i)?.focus();return}
+  if(it.date&&i===0){slip.date=it.date;const d=$("#sDate");if(d)d.value=it.date}
+  if(it.odds&&!L.odds){L.odds=it.odds;const o=$("#o"+i);if(o)o.value=it.odds}
+  const bk=matchBook(it.book);if(bk&&i===0&&!L.oddsTouched)slip.book=bk;
+  closePop();preview();}
+document.addEventListener("focusin",e=>{if(e.target.dataset?.combo)openPop(e.target)});
+document.addEventListener("focusout",e=>{if(e.target.dataset?.combo)setTimeout(()=>{if(document.activeElement!==popInput)closePop()},150)});
+document.addEventListener("keydown",e=>{
+  if(e.target.id==="passIn"&&e.key==="Enter"){doLogin();return}
+  if(e.key==="Escape"&&!$("#sheet").hidden&&!pop){closeSlip();return}
+  if(!pop||e.target!==popInput)return;const opts=pop.querySelectorAll(".po");
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();popIdx=(popIdx+(e.key==="ArrowDown"?1:-1)+opts.length)%opts.length;
+    opts.forEach((o,j)=>o.classList.toggle("hl",j===popIdx));opts[popIdx].scrollIntoView({block:"nearest"})}
+  else if(e.key==="Enter"&&popIdx>-1){e.preventDefault();pick(popIdx)}else if(e.key==="Escape")closePop();});
+document.addEventListener("input",e=>{const t=e.target;
+  if(t.dataset.leg!=null){const L=slip.legs[+t.dataset.leg];L[t.dataset.f]=t.value;if(t.dataset.f==="horse"){L.silks=null;L.hid=null;L.url=null}if(t.dataset.f==="odds")L.oddsTouched=true;if(t.dataset.combo)openPop(t);preview();}
+  else if(t.dataset.slip){slip[t.dataset.slip]=t.value;preview();}
+  else if(t.id==="sQ")debounced("s",()=>runSearch(t.value,"#sResults","open"));
+  else if(t.id==="tAdd")debounced("t",()=>runSearch(t.value,"#tResults","trackpath"));});
+document.addEventListener("change",e=>{const t=e.target;
+  if(t.id==="sEw"){slip.ew=t.checked;renderSlip();}
+  else if(t.dataset.slip){slip[t.dataset.slip]=t.value;preview();}});
+const timers={};const debounced=(k,fn)=>{clearTimeout(timers[k]);timers[k]=setTimeout(fn,350)};
+
+/* ================= Bets view ================= */
+function settleLeg(id,i,st){const b=state.bets.find(x=>x.id===id);if(!b)return;const l=b.legs[i];l.status=l.status===st?"pending":st;b.u=Date.now();if(calc(b).settled)editing=null;changed();}
+const STL={won:"Won",lost:"Lost",placed:"Placed",void:"Void",pending:"Pending"};
+function renderBets(){
+  const season=live(state.bets).filter(inSeason);
+  const settledAll=season.filter(b=>calc(b).settled);
+  const from=RANGES[range].days?addDays(todayISO(),-RANGES[range].days):SEASON_START;
+  const settled=settledAll.filter(b=>b.date>=from);
+  const pnl=settled.reduce((a,b)=>a+calc(b).pnl,0),staked=settled.reduce((a,b)=>a+calc(b).total,0);
+  const roi=staked?pnl/staked*100:0;
+  $("#pnlLabel").textContent=RANGES[range].label;
+  const big=$("#hdPnl");big.textContent=sgbp(pnl);big.classList.toggle("neg",pnl<0);
+  const r=$("#hdRoi");r.textContent=`${roi>0?"▲ ":roi<0?"▼ ":""}${Math.abs(roi).toFixed(1)}% ROI`;r.className="pill "+(roi>0?"won":roi<0?"lost":"");
+  $("#hdSub").textContent=staked?`on ${gbp(staked)} staked`:"Settle a bet to see your return";
+  document.querySelectorAll("#range button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.r===range));
+  renderChart(settled,from);
+  const wins=settledAll.filter(b=>calc(b).pnl>0).length,pend=season.filter(b=>!calc(b).settled);
+  $("#tiles").innerHTML=`<div class="tile"><span>Strike rate</span><b>${settledAll.length?Math.round(wins/settledAll.length*100):0}%</b></div>
+    <div class="tile"><span>Settled</span><b>${settledAll.length}</b></div>
+    <div class="tile"><span>Pending</span><b>${pend.length}</b></div>
+    <div class="tile"><span>At risk</span><b>${gbp(pend.reduce((a,b)=>a+calc(b).total,0))}</b></div>`;
+  renderComing();
+  let list=live(state.bets).slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.u||0)-(a.u||0));
+  if(filter==="pending")list=list.filter(b=>!calc(b).settled);
+  if(filter==="settled")list=list.filter(b=>calc(b).settled);
+  document.querySelectorAll("#filters button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.f===filter));
+  $("#betList").innerHTML=list.length?list.map(betHtml).join(""):`<p class="empty">${filter==="all"?"No bets yet this season. Add your first one with New bet.":"Nothing here."}</p>`;
+  const by={};settledAll.forEach(b=>{const c=calc(b);by[b.book]=by[b.book]||{n:0,st:0,p:0};by[b.book].n++;by[b.book].st+=c.total;by[b.book].p+=c.pnl;});
+  const rows=Object.entries(by).sort((a,b)=>b[1].p-a[1].p);
+  $("#byApp").innerHTML=rows.length?rows.map(([k,v])=>`<div class="row">${badge(k)}<span class="txt"><span class="t">${esc(k)}</span><span class="s">${v.n} bet${v.n>1?"s":""}, ${gbp(v.st)} staked, ${pct(v.p/v.st*100)} ROI</span></span><span class="r"><b class="${v.p>0?"pos":v.p<0?"neg":""}">${sgbp(v.p)}</b></span></div>`).join(""):`<p class="empty" style="border-top:1px solid var(--line)">Settle a bet to see how each app is doing.</p>`;
+}
+function betHtml(b){
+  const c=calc(b),multi=b.legs.length>1,open=!c.settled||editing===b.id;
+  const resPill=c.settled?`<button class="pill ${c.label}" data-act="editbet" data-id="${esc(b.id)}" title="Change result">${c.label==="void"?"Void":sgbp(c.pnl)}</button>`:`<span class="pill">Pending</span>`;
+  const btns=(l,i,mini)=>{const opts=[["won","Won"],...(b.ew?[["placed","Placed"]]:[]),["lost","Lost"],["void","Void"]];
+    return `<div class="settle${mini?" mini":""}">${opts.map(([st,lb])=>`<button class="${st} ${l.status===st?"on":""}" aria-pressed="${l.status===st}" data-act="settle" data-id="${esc(b.id)}" data-i="${i}" data-st="${st}">${lb}</button>`).join("")}</div>`};
+  const legs=b.legs.map((l,i)=>`<div class="leg">${silk(l.silks,l.horse,multi?36:40)}<span class="txt"><span class="t">${multi?`<span class="dot ${l.status}"></span>`:""}${esc(l.horse)}</span><span class="s">${esc(l.race||"Race not entered")}${multi?"":`, ${esc(b.book)}`}</span></span><span class="odds">${esc(l.odds)}</span>${!multi?resPill:""}</div>${open&&multi?btns(l,i,true):""}`).join("");
+  return `<div class="bet${b.id===lastAdded?" new":""}" data-bid="${esc(b.id)}">
+    ${multi?`<div class="bet-hd"><b>${typeLabel(b)}</b><span>${esc(b.book)}</span>${resPill}</div>`:""}
+    ${legs}
+    ${open&&!multi?btns(b.legs[0],0,false):""}
+    <div class="bet-ft"><span>${fmtDate(b.date)}${inSeason(b)?"":", outside season"}</span><span>Stake <b>${gbp(c.total)}</b>${b.ew?` e/w, ${+b.frac===.25?"1/4":"1/5"} ${b.places} places`:""}</span><span>${c.settled?"Returned":"To return"} <b>${gbp(c.settled?c.ret:c.ifWin)}</b></span>
+      <span class="end">${editing===b.id?`<button class="lnk" data-act="editbet" data-id="${esc(b.id)}">Done</button>`:""}<button class="lnk" data-act="delbet" data-id="${esc(b.id)}" aria-label="Delete bet" style="text-decoration:none;display:inline-flex">${ICON_DEL}</button></span></div>
+  </div>`;
+}
+function renderChart(settled,from){
+  const pts=settled.slice().sort((a,b)=>a.date.localeCompare(b.date)||(a.u||0)-(b.u||0));
+  if(!pts.length){$("#spark").innerHTML=`<p class="muted" style="margin:6px 0 0;font-size:14px">Your P&amp;L line appears here once bets in this period are settled.</p>`;return}
+  let run=0;const ys=[0,...pts.map(b=>run+=calc(b).pnl)];
+  const W=760,H=200,P=8,n=ys.length;
+  const mn=Math.min(0,...ys),mx=Math.max(0,...ys),rng=(mx-mn)||1;
+  const X=i=>P+i*(W-2*P)/(n-1),Y=v=>P+(mx-v)/rng*(H-2*P),z=Y(0);
+  const line=ys.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const area=`M${X(0)},${z} L${ys.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" L")} L${X(n-1).toFixed(1)},${z} Z`;
+  const last=ys[n-1],col=last>=0?"var(--win)":"var(--loss)";
+  $("#spark").innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="P&L over this period, now ${sgbp(last)}">
+    <defs><clipPath id="cu"><rect x="0" y="0" width="${W}" height="${z.toFixed(1)}"/></clipPath><clipPath id="cd"><rect x="0" y="${z.toFixed(1)}" width="${W}" height="${(H-z).toFixed(1)}"/></clipPath></defs>
+    <path d="${area}" fill="var(--win)" opacity=".1" clip-path="url(#cu)"/><path d="${area}" fill="var(--loss)" opacity=".1" clip-path="url(#cd)"/>
+    <line x1="0" x2="${W}" y1="${z.toFixed(1)}" y2="${z.toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 3"/>
+    <polyline points="${line}" fill="none" stroke="var(--win)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" clip-path="url(#cu)" vector-effect="non-scaling-stroke"/>
+    <polyline points="${line}" fill="none" stroke="var(--loss)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" clip-path="url(#cd)" vector-effect="non-scaling-stroke"/>
+    <circle cx="${X(n-1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="5" fill="${col}" stroke="#fff" stroke-width="2"/>
+  </svg><div class="axis"><span>${fmtDate(from)}</span><span>${pts.length} settled bet${pts.length>1?"s":""}</span><span>Today</span></div>`;
+}
+function renderComing(){
+  const today=todayISO();
+  const items=live(state.tracked).flatMap(t=>(t.profile?.entries||[]).filter(e=>e.date>=today).map(e=>({t,e}))).sort((a,b)=>(a.e.date+(a.e.time||"")).localeCompare(b.e.date+(b.e.time||""))).slice(0,6);
+  $("#coming").innerHTML=items.length?items.map(({t,e})=>`<button class="row" data-act="opentracked" data-id="${esc(t.id)}">${silk(t.profile?.silks,t.name,40)}<span class="txt"><span class="t">${esc(shortName(t.name))}</span><span class="s">${fmtDate(e.date)}, ${esc(e.course)}${e.time?" "+esc(e.time):""}</span></span>${e.odds?.best?`<span class="r"><b>${esc(e.odds.best.odds)}</b><span class="s">${esc(e.odds.best.book)}</span></span>`:""}</button>`).join("")
+    :`<p class="empty" style="border-top:1px solid var(--line)">Entries for horses in your tracker will show here.</p>`;
+}
+
+/* ================= Horse profiles ================= */
+async function fetchProfile(pathOrUrl,fresh){
+  const r=await api(`/api/horse?url=${encodeURIComponent(pathOrUrl)}${fresh?"&fresh=1":""}`);
+  if(r.warning)toast("Showing saved data: irishracing.com didn’t respond");
+  return r.horse;
+}
+const isTracked=id=>live(state.tracked).some(t=>t.id===id);
+function figHtml(ch){const n=+ch;return `<span class="fig ${n===1?"w":n===2||n===3?"p":""}">${esc(ch)}</span>`}
+function profileHtml(p,ctx){
+  const tr=isTracked(p.id),nm=shortName(p.name);
+  const tot=(p.stats||[]).find(s=>/total/i.test(s.label))||(p.stats||[])[0];
+  const desc=[p.country,p.age?`${p.age}yo`:"",[p.colour,p.sex].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const figs=String(p.formFigures||"").replace(/[^0-9A-Za-z]/g,"").slice(-6).split("").filter(Boolean);
+  const ents=(p.entries||[]).filter(e=>e.date>=todayISO());
+  const next=ents[0];
+  const trackBtn=ctx==="search"?(tr?`<button class="btn" data-act="opentracked" data-id="${esc(p.id)}">✓ Tracking</button>`:`<button class="btn" data-act="trackprofile">+ Add to tracker</button>`):`<button class="btn" data-act="untrack">Stop tracking</button>`;
+  return `<div class="prof">
+  <div class="prof-hd">${silk(p.silks,p.name,84)}<div style="display:flex;flex-direction:column;gap:3px;min-width:0"><h1>${esc(nm)}</h1>${desc?`<span class="s">${esc(desc)}</span>`:""}${p.trainer?`<span class="s">Trained by ${esc(p.trainer)}</span>`:""}</div></div>
+  ${figs.length?`<div class="figs"><span class="muted" style="font-size:13px;margin-right:4px">Form</span>${figs.map(figHtml).join("")}</div>`:""}
+  <div class="actions">${trackBtn}<button class="btn dark" data-act="toslip" data-ctx="${ctx}" data-i="${next?0:-1}">Add to bet slip</button></div>
+  <div class="tiles3"><div class="tile"><span>Rating</span><b>${p.rating??"–"}</b></div><div class="tile"><span>Runs</span><b>${tot?tot.runs:"–"}</b></div><div class="tile"><span>Wins</span><b>${tot?tot.wins:"–"}</b></div></div>
+  <div class="sec"><h3>${ents.length>1?"Upcoming entries":"Next run"}</h3>${ents.length?`<div class="list">${ents.map((e,i)=>{const dm=dayMon(e.date);return `<div class="row"><span class="date"><b>${dm.d}</b><small>${dm.m}</small></span><span class="txt"><span class="t">${esc(e.course)}${e.time?" "+esc(e.time):""}</span><span class="s">${esc(e.race)}</span></span>${e.odds?.best?`<span class="r"><b>${esc(e.odds.best.odds)}</b><span class="s">Best, ${esc(e.odds.best.book)}</span></span>`:""}<button class="btn sm" data-act="toslip" data-ctx="${ctx}" data-i="${i}" aria-label="Add ${esc(nm)} at ${esc(e.course)} to bet slip">Add</button></div>`}).join("")}</div>`:`<p class="muted" style="margin:0">No entries or declarations right now.</p>`}</div>
+  <div class="sec"><h3>Recent form</h3>${(p.form||[]).length?`<div class="list">${p.form.slice(0,10).map(r=>`<div class="row">${figHtml(r.pos??"–")}<span class="txt"><span class="t">${esc(r.course)}</span><span class="s">${[r.dist,r.going,r.race].filter(Boolean).map(esc).join(", ")}${r.ran?`, ${r.ran} ran`:""}</span></span><span class="r"><b>${esc(r.sp||"")}</b><span class="s"><a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:inherit">${fmtDateY(r.date)}</a></span></span></div>`).join("")}</div>`:`<p class="muted" style="margin:0">No runs found.</p>`}</div>
+  <div class="prof-ft"><span>Updated ${ago(p.fetchedAt)}</span><a href="${esc(p.url)}" target="_blank" rel="noopener">View on irishracing.com</a><button class="lnk" data-act="refresh" data-ctx="${ctx}">Refresh</button></div>
+  </div>`;
+}
+
+/* ================= Search (shared by Form search and Tracker) ================= */
+async function runSearch(q,target,act){
+  const box=$(target);q=q.trim();
+  if(q.length<2){box.innerHTML="";return}
+  box.innerHTML=`<div class="loading"><span class="spin"></span>Searching…</div>`;
+  try{
+    const r=await api(`/api/search?q=${encodeURIComponent(q)}`);
+    if(r.results.length&&r.results[0].fromLink){box.innerHTML=`<button class="row" data-act="${act}" data-p="${esc(r.results[0].path)}">${silk(null,q,40)}<span class="txt"><span class="t">Open this irishracing.com link</span><span class="s">${esc(r.results[0].path)}</span></span></button>`;return}
+    box.innerHTML=r.results.length?r.results.map(h=>{const t=live(state.tracked).find(x=>x.id===h.id);return `<button class="row" data-act="${act}" data-p="${esc(h.path)}">${silk(t?.profile?.silks,h.name,40)}<span class="txt"><span class="t">${esc(shortName(h.name))}</span><span class="s">${esc(h.name.match(/\(([A-Z]+)\)/)?.[1]||"")}${t?", in your tracker":""}</span></span></button>`}).join("")
+      :`<div class="hint">No horse called “${esc(q)}” in the index yet. It fills up from UK and Irish racecards and entries, so a horse that hasn’t been entered recently may be missing. Find it on <a href="https://www.google.com/search?q=${encodeURIComponent("site:irishracing.com/horse "+q)}" target="_blank" rel="noopener">irishracing.com</a>, then paste its page link here.</div>`;
+  }catch(e){if(e.message!=="auth")box.innerHTML=`<div class="hint">${esc(e.message)}</div>`}
+}
+let searchProfile=null;
+async function openSearchResult(path){
+  $("#sDetail").innerHTML=`<div class="loading"><span class="spin"></span>Fetching form from irishracing.com…</div>`;
+  if(innerWidth<900)$("#sDetail").scrollIntoView({behavior:"smooth"});
+  try{searchProfile=await fetchProfile(path);renderSearchDetail()}
+  catch(e){if(e.message!=="auth")$("#sDetail").innerHTML=`<p class="empty">${esc(e.message)}</p>`}
+}
+function renderSearchDetail(){if(searchProfile)$("#sDetail").innerHTML=profileHtml(searchProfile,"search")}
+
+/* ================= Tracker ================= */
+let current=null;
+function track(p){
+  const ex=state.tracked.find(t=>t.id===p.id);
+  if(ex){ex.del=false;ex.profile=p;ex.name=p.name;ex.u=Date.now()}
+  else state.tracked.unshift({id:p.id,name:p.name,url:p.url,profile:p,notes:[],added:Date.now(),u:Date.now()});
+  for(const b of live(state.bets))for(const l of b.legs)if(!l.silks&&norm(l.horse)===norm(p.name)&&p.silks){l.silks=p.silks;l.hid=p.id;l.url=p.url;b.u=Date.now()}
+  changed();
+}
+async function trackPath(path){
+  $("#tResults").innerHTML=`<div class="loading"><span class="spin"></span>Adding…</div>`;
+  try{const p=await fetchProfile(path);track(p);current=p.id;$("#tResults").innerHTML="";$("#tAdd").value="";renderTracker();toast(`${shortName(p.name)} added to your tracker`)}
+  catch(e){if(e.message!=="auth")$("#tResults").innerHTML=`<div class="hint">${esc(e.message)}</div>`}
+}
+const refreshing=new Set();
+async function refreshTracked(t,force){
+  if(refreshing.has(t.id))return;refreshing.add(t.id);
+  try{const p=await fetchProfile(t.url,force);t.profile=p;t.name=p.name;persist();pushState();renderTracker();renderComing();}
+  catch(e){if(force&&e.message!=="auth")toast(e.message)}
+  finally{refreshing.delete(t.id)}
+}
+function renderTracker(){
+  const list=live(state.tracked);
+  if(!list.some(t=>t.id===current))current=list[0]?.id||null;
+  $("#trkCount").textContent=list.length;
+  $("#trackedList").innerHTML=list.length?list.map(t=>{const e=(t.profile?.entries||[]).find(x=>x.date>=todayISO());const n=(t.notes||[]).length;
+    return `<button class="row" aria-current="${t.id===current}" data-act="opentracked" data-id="${esc(t.id)}">${silk(t.profile?.silks,t.name,44)}<span class="txt"><span class="t">${esc(shortName(t.name))}</span><span class="s">${e?`Next: ${fmtDate(e.date)}, ${esc(e.course)}`:"No entries yet"}</span></span><span class="r"><span class="s">${n} note${n===1?"":"s"}</span></span></button>`}).join("")
+    :`<p class="empty" style="border-top:1px solid var(--line)">You’re not tracking any horses yet. Search above, or add one from Form search.</p>`;
+  const t=list.find(x=>x.id===current);
+  const draft=$("#noteText")?.value||"";
+  $("#trackedDetail").innerHTML=t?`${t.profile?profileHtml(t.profile,"tracker"):`<div class="loading"><span class="spin"></span>Loading…</div>`}
+    <div class="prof" style="padding-top:0"><div class="sec"><h3>Your notes</h3>
+      <label for="noteText" class="sr">Add a note</label>
+      <textarea id="noteText" placeholder="What did you see? Ground, trip, jumping, market moves…"></textarea>
+      <div style="margin-top:8px"><button class="btn dark" data-act="addnote">Save note</button></div>
+      ${(t.notes||[]).length?t.notes.map((n,i)=>`<div class="note"><small><span>${new Date(n.t).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span><button class="lnk" data-act="delnote" data-i="${i}">Delete</button></small>${esc(n.text)}</div>`).join(""):`<p class="muted" style="margin:10px 0 0">No notes yet.</p>`}
+    </div></div>`:`<p class="empty">Pick a horse, or add one to start keeping notes.</p>`;
+  if(draft&&$("#noteText"))$("#noteText").value=draft;
+  if(t&&(!t.profile||Date.now()-new Date(t.profile.fetchedAt)>STALE_MS))refreshTracked(t,false);
+}
+
+/* ================= Render all ================= */
+function renderAll(){renderBets();renderTracker();if(searchProfile)renderSearchDetail();}
+
+/* ================= Login ================= */
+async function doLogin(){const v=$("#passIn").value.trim();if(!v)return;PASS=v;
+  try{localStorage.setItem("jb-pass",v)}catch(e){}
+  $("#loginErr").textContent="Checking…";
+  try{await api("/api/data");$("#login").hidden=true;$("#passIn").value="";pullState();}catch(e){if(e.message!=="auth")$("#loginErr").textContent=e.message}}
+
+/* ================= Actions ================= */
+const profileFor=ctx=>ctx==="search"?searchProfile:live(state.tracked).find(t=>t.id===current)?.profile;
+document.addEventListener("click",e=>{
+  if(e.target.id==="sheet"){closeSlip();return}
+  const el=e.target.closest("[data-act]");if(!el)return;const d=el.dataset;
+  if(el.tagName==="A")e.preventDefault();
+  switch(d.act){
+    case"login":doLogin();break;
+    case"tab":show(d.v);break;
+    case"newbet":openSlip();break;
+    case"closeslip":closeSlip();break;
+    case"range":range=d.r;renderBets();break;
+    case"filter":filter=d.f;renderBets();break;
+    case"settype":setType(d.t);break;
+    case"book":slip.book=d.b;document.querySelectorAll(".chips button").forEach(x=>x.setAttribute("aria-pressed",x===el));break;
+    case"addleg":slip.legs.push(blank());renderSlip();$("#h"+(slip.legs.length-1)).focus();break;
+    case"rmleg":slip.legs.splice(+d.i,1);renderSlip();break;
+    case"addbet":addBet();break;
+    case"settle":settleLeg(d.id,+d.i,d.st);break;
+    case"editbet":editing=editing===d.id?null:d.id;renderBets();break;
+    case"delbet":if(confirm("Delete this bet?")){const b=state.bets.find(x=>x.id===d.id);if(b){b.del=true;b.u=Date.now();changed()}}break;
+    case"open":openSearchResult(d.p);break;
+    case"trackpath":trackPath(d.p);break;
+    case"trackprofile":if(searchProfile){track(searchProfile);renderSearchDetail();const id=searchProfile.id;
+      toast(`${shortName(searchProfile.name)} added to your tracker`,{label:"View",fn:()=>{current=id;renderTracker();show("tracker")}})}break;
+    case"opentracked":current=d.id;renderTracker();show("tracker");break;
+    case"refresh":{if(d.ctx==="search"&&searchProfile){$("#sDetail").innerHTML=`<div class="loading"><span class="spin"></span>Refreshing…</div>`;fetchProfile(searchProfile.url,true).then(p=>{searchProfile=p;renderSearchDetail()}).catch(()=>renderSearchDetail())}
+      else{const t=live(state.tracked).find(x=>x.id===current);if(t){toast("Refreshing from irishracing.com…");refreshTracked(t,true)}}break;}
+    case"toslip":{const p=profileFor(d.ctx);if(!p)break;const ents=(p.entries||[]).filter(x=>x.date>=todayISO());const en=ents[+d.i];
+      slipFromEntry({silks:p.silks,hid:p.id,url:p.url,horse:shortName(p.name),race:en?`${en.course}${en.time?" "+en.time:""}, ${en.race}`:"",odds:en?.odds?.best?.odds||"",date:en?.date,book:en?.odds?.best?.book});break;}
+    case"addnote":{const txt=$("#noteText").value.trim();if(!txt)break;const t=state.tracked.find(x=>x.id===current);
+      t.notes=t.notes||[];t.notes.unshift({t:new Date().toISOString(),text:txt});t.u=Date.now();$("#noteText").value="";changed();break;}
+    case"delnote":{if(!confirm("Delete this note?"))break;const t=state.tracked.find(x=>x.id===current);t.notes.splice(+d.i,1);t.u=Date.now();changed();break;}
+    case"untrack":{const t=state.tracked.find(x=>x.id===current);if(t&&confirm(`Stop tracking ${shortName(t.name)}? Your notes on this horse will be deleted.`)){t.del=true;t.notes=[];t.u=Date.now();current=null;changed()}break;}
+    case"retrysync":if(el.classList.contains("err")){setSync("Saving…","busy");pushState()}break;
+    case"export":{const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),bets:live(state.bets),tracked:live(state.tracked).map(({profile,...t})=>t)},null,2)],{type:"application/json"});
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`jumps-book-backup-${todayISO()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);break;}
+    case"reindex":toast("Refreshing the horse index, this takes about 30 seconds…");api("/api/reindex",{method:"POST"}).then(r=>toast(`Horse index updated: ${r.added} horses from ${r.pages} pages`)).catch(e=>{if(e.message!=="auth")toast(e.message)});break;
+    case"logout":if(confirm("Sign out on this device?")){try{localStorage.removeItem("jb-pass");localStorage.removeItem(LKEY)}catch(e){}location.reload()}break;
+  }});
+
+/* ================= Start ================= */
+renderAll();
+if(!PASS)showLogin();else pullState();
+</script>
+</body>
+</html>
