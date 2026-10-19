@@ -12,7 +12,7 @@ export default async (req) => {
   const h = parseHorseUrl(q.get("url") || q.get("path"));
   if (!h) return json({ error: "That isn’t an irishracing.com horse link." }, 400);
   const fresh = q.get("fresh") === "1";
-  const cache = cacheStore(); const key = `horse-${h.id}`;
+  const cache = cacheStore(); const key = `horse-v2-${h.id}`;
   if (!fresh) {
     const hit = await cache.get(key, { type: "json" });
     if (hit && Date.now() - new Date(hit.fetchedAt).getTime() < TTL) return json({ horse: hit, cached: true });
