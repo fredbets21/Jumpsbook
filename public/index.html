@@ -148,8 +148,8 @@ button.row[aria-current="true"]{background:#F7F5F1;box-shadow:inset 3px 0 0 var(
 
 /* ---------- Horse detail ---------- */
 .two{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
-.two .l{flex:1 1 340px;min-width:0}
-.two .r{flex:999 1 520px;min-width:0}
+.two>.l{flex:1 1 340px;min-width:0}
+.two>.r{flex:999 1 520px;min-width:0}
 .searchbox{position:relative}
 .searchbox svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted)}
 input.text,select.text,textarea{width:100%;height:48px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--card);padding:0 14px;font-size:16px;outline:none}
@@ -378,9 +378,12 @@ const badge=b=>`<span class="bk">${esc(initials(b))}</span>`;
 const matchBook=b=>{const n=String(b||"").toLowerCase().replace(/[^a-z0-9]/g,"");return BOOKS.find(x=>x.toLowerCase().replace(/[^a-z0-9]/g,"")===n)||null};
 // Placeholder shown until a horse's real silks are known (a plain jersey and cap, never another horse's colours).
 const PLAIN=`<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M28 34L42 25H72L82 30L83 70H75L75 74H44L41 66L32 70Z" fill="#E9EBEE" stroke="#C9CDD3" stroke-width="1.5" stroke-linejoin="round"/><circle cx="19" cy="29" r="10" fill="#E9EBEE" stroke="#C9CDD3" stroke-width="1.5"/></svg>`;
+// If our cached copy fails, try the image straight from irishracing.com before showing the placeholder.
+function silkFail(img){if(img.dataset.direct&&!img.dataset.tried){img.dataset.tried="1";img.src=img.dataset.direct}else img.outerHTML=PLAIN}
+const PARSER=2;
 const silksSrc=u=>`/api/silks?u=${encodeURIComponent(u)}`;
 function silk(url,name,size=40){
-  const inner=url?`<img src="${esc(silksSrc(url))}" alt="${esc(shortName(name))} racing silks" loading="lazy" onerror="this.outerHTML=PLAIN">`:PLAIN;
+  const inner=url?`<img src="${esc(silksSrc(url))}" data-direct="${esc(url)}" alt="${esc(shortName(name))} racing silks" loading="lazy" onerror="silkFail(this)">`:PLAIN;
   return `<span class="silk s${size}">${inner}</span>`;
 }
 const ICON_DEL=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>`;
@@ -412,8 +415,12 @@ async function pushState(){
   catch(e){if(e.message!=="auth"){setSync("Not saved, tap to retry","err");toast(`Couldn’t save to the server: ${e.message}. It’s kept on this device and will retry.`);saveT=setTimeout(pushState,15000)}}
   finally{saving=false}
 }
+async function upgradeProfiles(){
+  for(const t of live(state.tracked)){if((t.profile?.parser||1)<PARSER){await refreshTracked(t,true);await new Promise(r=>setTimeout(r,400))}}
+  resolveSilks();
+}
 async function pullState(){
-  setTimeout(resolveSilks,1500);
+  setTimeout(upgradeProfiles,1200);
   try{const r=await api("/api/data");const before=JSON.stringify(r.state);state=mergeState(r.state,state);persist();renderAll();
     if(JSON.stringify(state)!==before)pushState();else setSync("Synced");}
   catch(e){if(e.message!=="auth")setSync("Can’t reach server","err")}
@@ -521,7 +528,7 @@ async function resolveSilks(){
   try{
     for(const b of live(state.bets)){
       for(const l of b.legs){
-        if(l.silks||l.silksTried||!l.horse)continue;
+        if(l.silks||l.silksV===PARSER||!l.horse)continue;
         let p=null;const t=trackedByName(l.horse);
         if(t?.profile?.silks)p=t.profile;
         else{
@@ -529,7 +536,7 @@ async function resolveSilks(){
             const hit=r.results.find(h=>norm(h.name)===norm(l.horse));
             if(hit)p=await fetchProfile(hit.path);}catch(e){if(e.message==="auth")return}
         }
-        l.silksTried=true;
+        l.silksTried=true;l.silksV=PARSER;
         if(p?.silks){l.silks=p.silks;l.hid=p.id;l.url=p.url}
         b.u=Date.now();changed();
         await new Promise(r=>setTimeout(r,400));
@@ -729,7 +736,9 @@ async function trackPath(path){
 const refreshing=new Set();
 async function refreshTracked(t,force){
   if(refreshing.has(t.id))return;refreshing.add(t.id);
-  try{const p=await fetchProfile(t.url,force);t.profile=p;t.name=p.name;persist();pushState();renderTracker();renderComing();}
+  try{const p=await fetchProfile(t.url,force);t.profile=p;t.name=p.name;
+    if(p.silks)for(const b of live(state.bets))for(const l of b.legs)if(!l.silks&&norm(l.horse)===norm(p.name)){l.silks=p.silks;l.hid=p.id;l.url=p.url;b.u=Date.now()}
+    persist();pushState();renderAll();}
   catch(e){if(force&&e.message!=="auth")toast(e.message)}
   finally{refreshing.delete(t.id)}
 }
@@ -750,7 +759,7 @@ function renderTracker(){
       ${(t.notes||[]).length?t.notes.map((n,i)=>`<div class="note"><small><span>${new Date(n.t).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span><button class="lnk" data-act="delnote" data-i="${i}">Delete</button></small>${esc(n.text)}</div>`).join(""):`<p class="muted" style="margin:10px 0 0">No notes yet.</p>`}
     </div></div>`:`<p class="empty">Pick a horse, or add one to start keeping notes.</p>`;
   if(draft&&$("#noteText"))$("#noteText").value=draft;
-  if(t&&(!t.profile||Date.now()-new Date(t.profile.fetchedAt)>STALE_MS))refreshTracked(t,false);
+  if(t&&(!t.profile||(t.profile.parser||1)<PARSER||Date.now()-new Date(t.profile.fetchedAt)>STALE_MS))refreshTracked(t,(t.profile?.parser||1)<PARSER);
 }
 
 /* ================= Render all ================= */
