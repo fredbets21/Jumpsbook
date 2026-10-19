@@ -123,9 +123,11 @@ export function parseHorse(html, path) {
   const out = { name, url: BASE + path, source: "irishracing.com", fetchedAt: new Date().toISOString() };
 
   const country = name && name.match(/\(([A-Z]{2,4})\)\s*$/); out.country = country ? country[1] : null;
-  const al = body.match(/\b(\d{1,2})yo\s+([a-z]{1,3})\s+([a-z])\s+(\d{4})\b/);
-  if (al) Object.assign(out, { age: +al[1], colour: al[2], sex: al[3], foaled: +al[4] });
-  else { const fl = body.match(/\b([a-z]{1,3})\s+([a-z])\s+(\d{4})\b/); if (fl) Object.assign(out, { colour: fl[1], sex: fl[2], foaled: +fl[3], age: new Date().getFullYear() - +fl[3] }); }
+  // Age, colour and sex sit on the line just after the horse's name ("2yo b c 2024").
+  const at = name ? body.indexOf(name) : -1;
+  const near = at >= 0 ? body.slice(at + name.length, at + name.length + 60) : "";
+  const al = near.match(/^\s*(?:(\d{1,2})yo\s+)?([a-z]{1,3})\s+([a-z])\s+(\d{4})\b/);
+  if (al) Object.assign(out, { colour: al[2], sex: al[3], foaled: +al[4], age: al[1] ? +al[1] : new Date().getFullYear() - +al[4] });
 
   for (const [k, l] of [["sire", "Sire"], ["dam", "Dam"], ["damSire", "Dam's Sire"], ["owner", "Owner"], ["trainer", "Trainer"], ["breeder", "Breeder"]]) out[k] = field(body, l);
   // Link-based values are cleaner when present.
@@ -134,8 +136,18 @@ export function parseHorse(html, path) {
   out.owner = linkText('a[href*="/owner/"]') || out.owner;
   out.sire = linkText('a[href*="/sire/"]') || out.sire;
 
-  const silk = $('img[src*="/colours/"]').first().attr("src");
+  // Silks: the owner's colours image next to the horse's name. Sites often lazy-load images, so check every attribute.
+  let silk = null;
+  $("img").each((_, im) => {
+    if (silk) return;
+    for (const at of ["src", "data-src", "data-original", "data-lazy-src", "srcset"]) {
+      const v = $(im).attr(at);
+      if (v && /\/colours\//i.test(v)) { silk = v.split(/[\s,]/)[0]; return; }
+    }
+  });
+  if (!silk) { const m = html.match(/["'(]((?:https?:)?\/\/[^"'()\s]*\/colours\/[^"'()\s]+?\.(?:gif|png|jpe?g|webp))/i) || html.match(/["'(](\/colours\/[^"'()\s]+?\.(?:gif|png|jpe?g|webp))/i); if (m) silk = m[1]; }
   out.silks = silk ? new URL(silk, BASE).href : null;
+  out.parser = 2;
   const ff = body.match(/Form Figures\s*-?\s*([0-9A-Za-z/\-]{1,30})/); out.formFigures = ff ? ff[1] : null;
 
   // Lifetime statistics rows.
