@@ -83,7 +83,8 @@ nav.tabs button:hover{color:var(--ink)}
   nav.tabs button svg{width:22px;height:22px}
 }
 
-main{padding:20px 0 110px}
+main{padding:32px 0 110px}
+@media (max-width:640px){main{padding-top:24px}}
 .view{display:none}.view.on{display:block}
 .grid{display:grid;grid-template-columns:390px 1fr;gap:20px;align-items:start}
 @media (max-width:880px){.grid{grid-template-columns:1fr}}
@@ -93,7 +94,7 @@ main{padding:20px 0 110px}
 .card-hd h2{margin:0;font-family:"Barlow Semi Condensed",sans-serif;font-size:1.25rem;font-weight:700}
 .card-bd{padding:16px}
 .card-hd.green{background:var(--brand);color:var(--on-brand);border-bottom:0}
-.sticky{position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px)}
+.sticky{position:sticky;top:calc(env(safe-area-inset-top,0px) + 78px)}
 @media (max-width:880px){.sticky{position:static}}
 .pill{font-size:.78rem;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
 .card-hd.green .pill{background:rgba(255,255,255,.14);color:#fff}
