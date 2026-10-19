@@ -251,6 +251,16 @@ tr:last-child td{border-bottom:0}
 .toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .toast button{background:var(--gold);color:var(--gold-ink);border:0;border-radius:8px;padding:6px 10px;font-weight:700}
 @media (max-width:640px){.toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
+.slip-toggle{display:none}
+@media (max-width:880px){
+  .slip-toggle{display:inline-flex}
+  .card.slip-closed .card-bd{display:none}
+  .card.slip-closed .card-hd{border-radius:14px}
+}
+.bet.new{animation:flash 2.2s ease-out}
+@keyframes flash{0%,30%{box-shadow:0 0 0 3px var(--gold),var(--shadow)}100%{box-shadow:var(--shadow)}}
+.sync.err{background:#FF8A80;color:#2A0907;border:0;border-radius:999px;padding:3px 10px;font-weight:700;opacity:1;cursor:pointer}
+.tag.out{color:var(--loss);font-weight:600}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
@@ -305,7 +315,7 @@ tr:last-child td{border-bottom:0}
       <svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="10" fill="#FFD23F"/><path d="M12 9v11a8 8 0 0 0 16 0V9" fill="none" stroke="#073F2C" stroke-width="5" stroke-linecap="round"/><circle cx="12" cy="14" r="1.3" fill="#FFD23F"/><circle cx="12" cy="20" r="1.3" fill="#FFD23F"/><circle cx="28" cy="14" r="1.3" fill="#FFD23F"/><circle cx="28" cy="20" r="1.3" fill="#FFD23F"/></svg>
       <b>Jumps Book</b>
     </div>
-    <div class="bar-r"><span class="sync" id="sync"></span><span class="season">Season 26/27, Oct to Jun</span></div>
+    <div class="bar-r"><button class="sync" id="sync" data-act="retrysync" style="background:none;border:0;color:inherit"></button><span class="season">Season 26/27, Oct to Jun</span></div>
   </div>
   <div class="wrap hero">
     <div>
@@ -328,8 +338,8 @@ tr:last-child td{border-bottom:0}
 <main class="wrap">
   <section class="view on" id="v-bets">
     <div class="grid">
-      <div class="card sticky">
-        <div class="card-hd green"><h2>Bet slip</h2><span class="pill" id="slipPill">Single</span></div>
+      <div class="card sticky" id="slipCard">
+        <div class="card-hd green"><h2>Bet slip</h2><span class="pill" id="slipPill">Single</span><button class="btn gold sm slip-toggle" data-act="toggleslip" id="slipToggle">+ New bet</button></div>
         <div class="card-bd" id="slip"></div>
       </div>
       <div>
@@ -429,20 +439,22 @@ const live=a=>(a||[]).filter(x=>!x.del);
 function mergeList(a=[],b=[]){const m=new Map();for(const it of[...a,...b]){const c=m.get(it.id);if(!c||(it.u||0)>=(c.u||0))m.set(it.id,it)}return[...m.values()]}
 const mergeState=(a,b)=>({bets:mergeList(a.bets,b.bets),tracked:mergeList(a.tracked,b.tracked),settings:{...(a.settings||{}),...(b.settings||{})}});
 function persist(){try{localStorage.setItem(LKEY,JSON.stringify(state))}catch(e){}}
-const setSync=t=>{$("#sync").textContent=t};
+const setSync=(t,err)=>{const el=$("#sync");el.textContent=t;el.classList.toggle("err",!!err)};
+const isMobile=()=>innerWidth<=880;
+function setSlipOpen(open){$("#slipCard").classList.toggle("slip-closed",!open);$("#slipToggle").textContent=open?"Close":"+ New bet"}
 let saveT=null,saving=false;
 function changed(){persist();setSync("Saving…");clearTimeout(saveT);saveT=setTimeout(pushState,600);renderAll();}
 async function pushState(){
   if(saving){saveT=setTimeout(pushState,400);return}
   saving=true;const sent=JSON.stringify(state);
   try{const r=await api("/api/data",{method:"PUT",body:{state:JSON.parse(sent)}});state=mergeState(r.state,state);persist();setSync("Synced");renderAll(true);}
-  catch(e){if(e.message!=="auth"){setSync("Offline, will retry");saveT=setTimeout(pushState,10000)}}
+  catch(e){if(e.message!=="auth"){setSync("Not saved, tap to retry",true);toast(`Couldn’t save to the server: ${e.message}. It’s kept on this device and will retry.`);saveT=setTimeout(pushState,15000)}}
   finally{saving=false}
 }
 async function pullState(){
   try{const r=await api("/api/data");const before=JSON.stringify(r.state);state=mergeState(r.state,state);persist();renderAll(true);
     if(JSON.stringify(state)!==before)pushState();else setSync("Synced");}
-  catch(e){if(e.message!=="auth")setSync("Offline")}
+  catch(e){if(e.message!=="auth")setSync("Can’t reach server",true)}
 }
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&PASS)pullState()});
 
@@ -522,14 +534,19 @@ function addBet(){const m=$("#betMsg");
   m.textContent="";
   state.bets.push({id:"b"+Date.now()+Math.random().toString(36).slice(2,6),u:Date.now(),type:slip.type,date:slip.date,book:slip.book,stake:+slip.stake,ew:slip.ew,frac:+slip.frac,places:+slip.places,
     legs:slip.legs.map(l=>({horse:l.horse.trim(),race:l.race.trim(),odds:l.odds.trim(),status:"pending"}))});
-  slip.legs=slip.legs.map(blank);slip.stake="";renderSlip();changed();toast("Bet added");
+  const nb=state.bets[state.bets.length-1];lastAdded=nb.id;setTimeout(()=>{if(lastAdded===nb.id)lastAdded=null},2500);
+  if(filter==="settled"){filter="all";document.querySelectorAll("#filters button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.f==="all"))}
+  slip.legs=slip.legs.map(blank);slip.stake="";renderSlip();changed();
+  if(isMobile())setSlipOpen(false);
+  const card=document.querySelector(`[data-bid="${nb.id}"]`);if(card)card.scrollIntoView({behavior:"smooth",block:"center"});
+  toast(inSeason(nb)?"Bet added":"Bet added, but it’s dated outside the 26/27 season so it doesn’t count towards the P&L");
 }
 function slipFromEntry(d){
   let i=slip.legs.findIndex(l=>!l.horse.trim());if(i<0){if(slip.type==="acca"){slip.legs.push(blank());i=slip.legs.length-1}else i=0}
   slip.legs[i]={horse:d.horse,race:d.race,odds:d.odds||""};
   if(i===0&&d.date)slip.date=d.date;
   const bk=matchBook(d.book);if(bk)slip.book=bk;
-  renderSlip();show("bets");toast(`${d.horse} added to your bet slip`);
+  renderSlip();show("bets");setSlipOpen(true);$("#slipCard").scrollIntoView({behavior:"smooth"});toast(`${d.horse} added to your bet slip`);
 }
 
 /* ---------- Combobox suggestions ---------- */
@@ -587,7 +604,7 @@ document.addEventListener("change",e=>{const t=e.target;
 const timers={};const debounced=(k,fn)=>{clearTimeout(timers[k]);timers[k]=setTimeout(fn,350)};
 
 /* ================= Bets list ================= */
-let filter="all";
+let filter="all",lastAdded=null;
 function settleLeg(id,i,st){const b=state.bets.find(x=>x.id===id);if(!b)return;const l=b.legs[i];l.status=l.status===st?"pending":st;b.u=Date.now();changed();}
 function renderBets(){
   const season=live(state.bets).filter(inSeason);
@@ -602,15 +619,16 @@ function renderBets(){
     <div class="tile"><span>Strike rate</span><b>${settled.length?Math.round(wins/settled.length*100):0}%</b></div>
     <div class="tile"><span>Pending bets</span><b>${pend.length}</b></div>
     <div class="tile"><span>Pending stakes</span><b>${gbp(pend.reduce((a,b)=>a+calc(b).total,0))}</b></div>`;
-  let list=season.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.u||0)-(a.u||0));
+  let list=live(state.bets).slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.u||0)-(a.u||0));
   if(filter==="pending")list=list.filter(b=>!calc(b).settled);
   if(filter==="settled")list=list.filter(b=>calc(b).settled);
   const STL={won:"Won",lost:"Lost",placed:"Placed",void:"Void",pending:"Pending"};
   $("#betList").innerHTML=list.length?list.map(b=>{const c=calc(b),multi=b.legs.length>1;
     const sbtns=(i,l)=>{const opts=[["won",multi?"Won":"Winner"],...(b.ew?[["placed","Placed"]]:[]),["lost",multi?"Lost":"Loser"],["void","Void"]];
       return `<div class="sb ${multi?"mini":""}">${opts.map(([st,lb])=>`<button class="${st} ${l.status===st?"on":""}" aria-pressed="${l.status===st}" data-act="settle" data-id="${esc(b.id)}" data-i="${i}" data-st="${st}">${lb}</button>`).join("")}</div>`};
-    return `<article class="bet">
-      <div class="bet-hd">${badge(b.book)}<span class="nm">${esc(b.book)}</span><span class="tag">${typeLabel(b)}</span><span class="dt">${fmtDate(b.date)}</span><span class="st ${c.label}">${STL[c.label]}</span></div>
+    const isNew=b.id===lastAdded;
+    return `<article class="bet${isNew?" new":""}" data-bid="${esc(b.id)}">
+      <div class="bet-hd">${badge(b.book)}<span class="nm">${esc(b.book)}</span><span class="tag">${typeLabel(b)}</span>${inSeason(b)?"":`<span class="tag out">Outside season</span>`}<span class="dt">${fmtDate(b.date)}</span><span class="st ${c.label}">${STL[c.label]}</span></div>
       <div class="legs">${b.legs.map((l,i)=>`<div class="lg"><div class="lg-row"><div class="lg-main"><div class="hn">${multi?`<span class="ldot ${l.status}"></span>`:""}${esc(l.horse)}</div><div class="rc">${esc(l.race||"Race not entered")}</div></div><span class="oddp">${esc(l.odds)}</span></div>${sbtns(i,l)}</div>`).join("")}</div>
       <div class="bet-ft"><div><span>Stake</span><b>${gbp(c.total)}</b></div>
         ${b.ew?`<div><span>Terms</span><b>${+b.frac===.25?"1/4":"1/5"}, ${b.places} pl</b></div>`:""}
@@ -742,6 +760,8 @@ const profileFor=ctx=>ctx==="search"?searchProfile:live(state.tracked).find(t=>t
 document.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el)return;const d=el.dataset;
   switch(d.act){
     case"login":doLogin();break;
+    case"toggleslip":setSlipOpen($("#slipCard").classList.contains("slip-closed"));break;
+    case"retrysync":if(el.classList.contains("err")){setSync("Saving…");pushState()}break;
     case"tab":show(d.v);break;
     case"filter":filter=d.f;document.querySelectorAll("#filters button").forEach(x=>x.setAttribute("aria-pressed",x===el));renderBets();break;
     case"book":slip.book=d.b;document.querySelectorAll(".books button").forEach(x=>x.setAttribute("aria-pressed",x===el));break;
@@ -771,6 +791,7 @@ document.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if
 
 /* ================= Start ================= */
 renderSlip();renderAll();
+if(isMobile()&&live(state.bets).length)setSlipOpen(false);
 if(!PASS)showLogin();else pullState();
 
 </script>
