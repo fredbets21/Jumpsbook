@@ -352,7 +352,7 @@ input.odds{font-weight:600;font-size:18px}
 <script>
 /* ================= Config ================= */
 const BOOKS=["Bet365","Paddy Power","Sky Bet","William Hill","Betfair","Betfred","Coral","Ladbrokes","BoyleSports","Other"];
-const TYPES={single:{n:1,label:"Single"},double:{n:2,label:"Double"},treble:{n:3,label:"Treble"},acca:{n:4,label:"Acca"}};
+const TYPES={single:{n:1,label:"Single"},double:{n:2,label:"Double"},treble:{n:3,label:"Treble"},trixie:{n:3,label:"Trixie"},acca:{n:4,label:"Acca"}};
 const SEASON_START="2026-10-01",SEASON_END="2027-06-30";
 const STALE_MS=6*60*60*1000;
 const RANGES={"1w":{days:7,label:"P&L, last 7 days"},"1m":{days:30,label:"P&L, last 30 days"},"3m":{days:91,label:"P&L, last 3 months"},"season":{days:null,label:"Season P&L, 2026/27"}};
@@ -437,21 +437,38 @@ function toast(msg,btn){$("#toastMsg").textContent=msg;const b=$("#toastBtn");b.
   $("#toast").classList.add("on");clearTimeout(toastT);toastT=setTimeout(()=>$("#toast").classList.remove("on"),4000);}
 
 /* ================= Bet maths ================= */
+// Which legs make up each line of the bet. A trixie is 3 doubles + 1 treble (4 lines); everything else is one line.
+function combos(b){const n=b.legs.length,all=[...Array(n).keys()];
+  if(b.type==="trixie"){const out=[];for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)out.push([i,j]);out.push(all);return out}
+  return[all];}
 function calc(b){
-  const s=+b.stake||0,frac=+b.frac||.2,total=b.ew?s*2:s;
-  let wf=1,pf=1,pot=1,potp=1,pending=false,lost=false,allVoid=b.legs.length>0;
-  for(const l of b.legs){const d=toDec(l.odds),pd=(d-1)*frac+1;pot*=d;potp*=pd;
-    if(l.status!=="void")allVoid=false;
-    if(l.status==="won"){wf*=d;pf*=pd}
-    else if(l.status==="placed"){wf=0;pf*=pd}
-    else if(l.status==="lost"){wf=0;pf=0;lost=true}
-    else if(l.status!=="void"){pending=true}}
-  const ifWin=s*pot+(b.ew?s*potp:0),settled=!pending||lost,ret=settled?s*wf+(b.ew?s*pf:0):null;
-  let label="pending";if(settled)label=allVoid?"void":ret===0?"lost":wf>0?"won":"placed";
-  return{total,ifWin,placeOnly:b.ew?s*potp:0,odds:pot,ret,pnl:settled?ret-total:null,settled,label};
+  const s=+b.stake||0,frac=+b.frac||.2,cs=combos(b),lines=cs.length*(b.ew?2:1),total=s*lines;
+  // Per leg: decimal odds, place odds, and the factor it contributes now (null while the race is still to run).
+  const L=b.legs.map(l=>{const d=toDec(l.odds),pd=(d-1)*frac+1,st=l.status||"pending";
+    return{d,pd,st,w:st==="won"?d:st==="void"?1:st==="pending"?null:0,p:st==="won"||st==="placed"?pd:st==="void"?1:st==="pending"?null:0}});
+  const line=(c,k,mode)=>{let f=1;for(const i of c){let x=L[i][k];if(x===null){if(mode==="now")return null;x=k==="w"?L[i].d:L[i].pd}f*=x}return f};
+  let ifWin=0,placeOnly=0,maxRet=0,locked=0,anyWin=false,paid=0;
+  for(const c of cs){
+    const w=line(c,"w","all"),p=b.ew?line(c,"p","all"):0;
+    ifWin+=s*c.reduce((a,i)=>a*L[i].d,1)+(b.ew?s*c.reduce((a,i)=>a*L[i].pd,1):0);
+    placeOnly+=b.ew?s*c.reduce((a,i)=>a*L[i].pd,1):0;
+    maxRet+=s*w+s*p;
+    const wn=line(c,"w","now"),pn=b.ew?line(c,"p","now"):0;
+    if(wn)locked+=s*wn,anyWin=true,paid++; if(pn)locked+=s*pn;
+  }
+  const pending=L.some(x=>x.st==="pending"),settled=!pending||maxRet===0,ret=settled?locked:null;
+  const allVoid=L.length>0&&L.every(x=>x.st==="void");
+  let label="pending";if(settled)label=allVoid?"void":ret===0?"lost":anyWin?"won":"placed";
+  return{total,lines,lineCount:cs.length,ifWin,placeOnly,odds:L.reduce((a,x)=>a*x.d,1),ret,locked,maxRet,paid,pnl:settled?ret-total:null,settled,label};
+}
+// Trixie scenarios for the slip: what comes back depending on which horses win.
+function trixieScenarios(b){
+  const nm=i=>shortName(b.legs[i].horse)||`Leg ${i+1}`;
+  const run=won=>calc({...b,legs:b.legs.map((l,i)=>({...l,status:won.includes(i)?"won":"lost"}))}).ret;
+  return[{t:"All three win",v:run([0,1,2])},{t:`${nm(0)} and ${nm(1)} win`,v:run([0,1])},{t:`${nm(0)} and ${nm(2)} win`,v:run([0,2])},{t:`${nm(1)} and ${nm(2)} win`,v:run([1,2])},{t:"Only one wins",v:0}];
 }
 const inSeason=b=>b.date>=SEASON_START&&b.date<=SEASON_END;
-const typeLabel=b=>{const n=b.legs.length;const t=b.type==="acca"?`${n}-fold acca`:TYPES[b.type].label.toLowerCase();const s=(b.ew?"each-way ":"")+t;return s[0].toUpperCase()+s.slice(1)};
+const typeLabel=b=>{const n=b.legs.length;const t=b.type==="acca"?`${n}-fold acca`:b.type==="trixie"?"trixie":TYPES[b.type].label.toLowerCase();const s=(b.ew?"each-way ":"")+t;return s[0].toUpperCase()+s.slice(1)};
 
 /* ================= Bet slip ================= */
 const blank=()=>({horse:"",race:"",odds:"",silks:null,hid:null,url:null});
@@ -474,7 +491,7 @@ function renderSlip(){
   ${slip.type==="acca"?`<button class="btn full" data-act="addleg">+ Add another horse</button>`:""}
   <div class="legcard">
     <div class="grid2">
-      <label class="f" for="sStake">Stake${slip.ew?" per way":""}<input id="sStake" class="text odds" type="number" min="0" step="0.5" inputmode="decimal" data-slip="stake" value="${esc(slip.stake)}" placeholder="£10.00"></label>
+      <label class="f" for="sStake">Stake${slip.type==="trixie"?" per line":slip.ew?" per way":""}<input id="sStake" class="text odds" type="number" min="0" step="0.5" inputmode="decimal" data-slip="stake" value="${esc(slip.stake)}" placeholder="£10.00"></label>
       <label class="f" for="sDate">Date<input id="sDate" class="text" type="date" data-slip="date" value="${slip.date}"></label>
     </div>
     <div class="switch"><span>Each way<small>${slip.ew?"Stake is per way":"Doubles your stake to cover the place"}</small></span><label class="tgl"><input type="checkbox" id="sEw" ${slip.ew?"checked":""} aria-label="Each way"><i></i></label></div>
@@ -489,11 +506,14 @@ function renderSlip(){
   preview();
 }
 function preview(){
-  const c=calc({...slip,stake:+slip.stake||0,legs:slip.legs.map(l=>({...l,status:"pending"}))});
-  const ok=slip.legs.every(l=>!isNaN(toDec(l.odds)));
-  $("#sum").innerHTML=`<div class="r"><span>Total stake</span><span>${gbp(c.total)}</span></div>
-    ${slip.legs.length>1?`<div class="r"><span>Combined odds</span><span>${ok?c.odds.toFixed(2):"–"}</span></div>`:""}
-    ${slip.ew?`<div class="r"><span>Return if ${slip.legs.length>1?"all place":"placed"}</span><span>${ok?gbp(c.placeOnly):"–"}</span></div>`:""}
+  const b={...slip,stake:+slip.stake||0,legs:slip.legs.map(l=>({...l,status:"pending"}))};
+  const c=calc(b),ok=slip.legs.every(l=>!isNaN(toDec(l.odds))),trix=slip.type==="trixie";
+  const lines=trix?`${c.lines} lines × ${gbp(b.stake)}`:"";
+  $("#sum").innerHTML=`<div class="r"><span>Total stake${lines?` (${lines})`:""}</span><span>${gbp(c.total)}</span></div>
+    ${slip.legs.length>1&&!trix?`<div class="r"><span>Combined odds</span><span>${ok?c.odds.toFixed(2):"–"}</span></div>`:""}
+    ${trix?(ok?trixieScenarios(b).map(x=>`<div class="r"><span>${esc(x.t)}</span><span class="${x.v>c.total?"pos":""}">${gbp(x.v)}</span></div>`).join(""):`<div class="r"><span>Enter odds for all three to see each outcome</span><span></span></div>`)
+      +(slip.ew?`<div class="r"><span>Plus place part if they only place</span><span>${ok?"up to "+gbp(c.placeOnly):"–"}</span></div>`:""):""}
+    ${slip.ew&&!trix?`<div class="r"><span>Return if ${slip.legs.length>1?"all place":"placed"}</span><span>${ok?gbp(c.placeOnly):"–"}</span></div>`:""}
     <div class="r main"><span>Return if ${slip.legs.length>1?"all win":"it wins"}</span><b>${ok?gbp(c.ifWin):"£–"}</b></div>`;
 }
 let lastAdded=null,filter="all",range="season",editing=null;
@@ -641,7 +661,7 @@ function betHtml(b){
     ${multi?`<div class="bet-hd"><b>${typeLabel(b)}</b><span>${esc(b.book)}</span>${resPill}</div>`:""}
     ${legs}
     ${open&&!multi?btns(b.legs[0],0,false):""}
-    <div class="bet-ft"><span>${fmtDate(b.date)}${inSeason(b)?"":", outside season"}</span><span>Stake <b>${gbp(c.total)}</b>${b.ew?` e/w, ${+b.frac===.25?"1/4":"1/5"} ${b.places} places`:""}</span><span>${c.settled?"Returned":"To return"} <b>${gbp(c.settled?c.ret:c.ifWin)}</b></span>
+    <div class="bet-ft"><span>${fmtDate(b.date)}${inSeason(b)?"":", outside season"}</span><span>Stake <b>${gbp(c.total)}</b>${c.lineCount>1?` (${c.lines} lines × ${gbp(+b.stake)})`:""}${b.ew?` e/w, ${+b.frac===.25?"1/4":"1/5"} ${b.places} places`:""}</span><span>${c.settled?"Returned":c.lineCount>1?"If all win":"To return"} <b>${gbp(c.settled?c.ret:c.ifWin)}</b></span>${!c.settled&&c.lineCount>1&&c.locked>0?`<span>Banked so far <b class="pos">${gbp(c.locked)}</b></span>`:""}${c.settled&&c.lineCount>1?`<span>${c.paid} of ${c.lineCount} lines won</span>`:""}
       <span class="end">${editing===b.id?`<button class="lnk" data-act="editbet" data-id="${esc(b.id)}">Done</button>`:""}<button class="lnk" data-act="delbet" data-id="${esc(b.id)}" aria-label="Delete bet" style="text-decoration:none;display:inline-flex">${ICON_DEL}</button></span></div>
   </div>`;
 }
